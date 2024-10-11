@@ -3,6 +3,7 @@ package com.utfpr;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.IntStream;
 
 public class CorridaMotos {
 
@@ -46,15 +47,19 @@ public class CorridaMotos {
         public void run() {
             try {
                 // Simula o tempo da corrida
-                Thread.sleep(1000);
+                Thread.sleep(10);
                 // Registra o competidor na lista de chegada
                 synchronized (ordemChegada) {
                     ordemChegada.add(competidor);  // Adiciona à lista
                 }
-                competidoresTerminados++;
+                incrementarCompetidoresTerminados();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        public static synchronized void incrementarCompetidoresTerminados() {
+            competidoresTerminados++;
         }
 
         public static void resetarCompetidoresTerminados() {
@@ -69,31 +74,33 @@ public class CorridaMotos {
         Competidor[] competidores = new Competidor[numeroDeCompetidores];
 
         // Inicializa os competidores
-        for (int i = 0; i < numeroDeCompetidores; i++) {
-            competidores[i] = new Competidor(i);
-        }
+
+        IntStream.range(1, numeroDeCompetidores + 1).
+                forEach(i -> competidores[i - 1] = new Competidor(i));
 
         // Executa 10 corridas
-        for (int corrida = 1; corrida <= numeroDeCorridas; corrida++) {
+        IntStream.rangeClosed(1, numeroDeCorridas).forEach(corrida -> {
             List<Competidor> ordemChegada = new ArrayList<>();
-            Corrida.resetarCompetidoresTerminados();  // Reseta contador chegada
+            Corrida.resetarCompetidoresTerminados();
 
             // Cria uma thread para cada competidor em cada corrida
-            for (int i = 0; i < numeroDeCompetidores; i++) {
-                new Thread(new Corrida(competidores[i], ordemChegada)).start();
-            }
+            IntStream.range(0, numeroDeCompetidores).
+                    forEach(i -> new Thread(new Corrida(competidores[i], ordemChegada)).start());
 
             // Aguarda até que todos os competidores tenham cruzado a linha de chegada
             while (Corrida.competidoresTerminados < numeroDeCompetidores) {
-                Thread.sleep(10);  // Faz o main thread aguardar
+                try {
+                    Thread.sleep(10);  // Faz o main thread aguardar
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
 
             // Distribui os pontos de acordo com a ordem de chegada
-            for (int i = 0; i < ordemChegada.size(); i++) {
-                int pontos = numeroDeCompetidores - i;  // Primeiro lugar ganha 10 pontos, segundo 9, etc.
-                ordemChegada.get(i).adicionarPontos(pontos);
-            }
-        }
+
+            IntStream.range(0, ordemChegada.size()).
+                    forEach(i -> ordemChegada.get(i).adicionarPontos(i));
+        });
 
         exibirPodioEPlacar(competidores);
     }
