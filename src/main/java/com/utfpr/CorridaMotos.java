@@ -1,8 +1,7 @@
 package com.utfpr;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 public class CorridaMotos {
@@ -35,8 +34,8 @@ public class CorridaMotos {
 
     public static class Corrida implements Runnable {
         private final Competidor competidor;
-        private final List<Competidor> ordemChegada;
-        private static volatile int competidoresTerminados = 0;
+        private List<Competidor> ordemChegada = Collections.synchronizedList(new ArrayList<>());
+        private static AtomicInteger competidoresTerminados = new AtomicInteger(0);
 
         public Corrida(Competidor competidor, List<Competidor> ordemChegada) {
             this.competidor = competidor;
@@ -48,22 +47,15 @@ public class CorridaMotos {
             try {
                 // Simula o tempo da corrida
                 Thread.sleep(10);
-                // Registra o competidor na lista de chegada
-                synchronized (ordemChegada) {
-                    ordemChegada.add(competidor);  // Adiciona à lista
-                }
-                incrementarCompetidoresTerminados();
+                ordemChegada.add(competidor);  // Adiciona à lista
+                competidoresTerminados.incrementAndGet();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        public static synchronized void incrementarCompetidoresTerminados() {
-            competidoresTerminados++;
-        }
-
         public static void resetarCompetidoresTerminados() {
-            competidoresTerminados = 0;
+            competidoresTerminados.set(0);
         }
     }
 
@@ -79,8 +71,9 @@ public class CorridaMotos {
                 forEach(i -> competidores[i - 1] = new Competidor(i));
 
         // Executa 10 corridas
+        
         IntStream.rangeClosed(1, numeroDeCorridas).forEach(corrida -> {
-            List<Competidor> ordemChegada = new ArrayList<>();
+            List<Competidor> ordemChegada = Collections.synchronizedList(new ArrayList<>());
             Corrida.resetarCompetidoresTerminados();
 
             // Cria uma thread para cada competidor em cada corrida
@@ -88,7 +81,7 @@ public class CorridaMotos {
                     forEach(i -> new Thread(new Corrida(competidores[i], ordemChegada)).start());
 
             // Aguarda até que todos os competidores tenham cruzado a linha de chegada
-            while (Corrida.competidoresTerminados < numeroDeCompetidores) {
+            while (Corrida.competidoresTerminados.get() < numeroDeCompetidores) {
                 try {
                     Thread.sleep(10);  // Faz o main thread aguardar
                 } catch (InterruptedException e) {
@@ -99,7 +92,7 @@ public class CorridaMotos {
             // Distribui os pontos de acordo com a ordem de chegada
 
             IntStream.range(0, ordemChegada.size()).
-                    forEach(i -> ordemChegada.get(i).adicionarPontos(i));
+                    forEach(i -> ordemChegada.get(i).adicionarPontos(numeroDeCorridas - i));
         });
 
         exibirPodioEPlacar(competidores);
